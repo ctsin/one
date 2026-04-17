@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20260415.1 2025-10-08 nodejs_compat
 declare namespace Cloudflare {
   interface GlobalProps {
-    mainModule: typeof import("./src/api/index");
+    mainModule: typeof import("./src/worker/index");
   }
   interface Env {}
 }
@@ -10700,7 +10700,7 @@ type AIGatewayHeaders = {
   [key: string]: string | number | boolean | object;
 };
 type AIGatewayUniversalRequest = {
-  provider: AIGatewayProviders | string; // eslint-disable-line
+  provider: AIGatewayProviders | string;
   endpoint: string;
   headers: Partial<AIGatewayHeaders>;
   query: unknown;
@@ -10718,7 +10718,7 @@ declare abstract class AiGateway {
       signal?: AbortSignal;
     },
   ): Promise<Response>;
-  getUrl(provider?: AIGatewayProviders | string): Promise<string>; // eslint-disable-line
+  getUrl(provider?: AIGatewayProviders | string): Promise<string>;
 }
 /**
  * @deprecated Use the standalone AI Search Workers binding instead.
