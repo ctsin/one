@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 import { jwt, sign } from "hono/jwt";
+import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
+import { users } from "../db/schema";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -8,12 +11,14 @@ app.post("/api/auth/signin", async (c) => {
   const { phone } = await c.req.json<{ phone: string }>();
   if (!phone) return c.json({ error: "phone required" }, 400);
 
-  const user = await c.env.DB.prepare(
-    "SELECT id, phone, name FROM users WHERE phone = ?",
-  )
-    .bind(phone)
-    .first<{ id: string; phone: string; name: string }>();
+  const db = drizzle(c.env.DB);
+  const result = await db
+    .select({ id: users.id, phone: users.phone, name: users.name })
+    .from(users)
+    .where(eq(users.phone, phone))
+    .limit(1);
 
+  const user = result[0];
   if (!user) return c.json({ error: "user not found" }, 401);
 
   const token = await sign(
