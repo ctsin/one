@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/d1";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, isNull, ne } from "drizzle-orm";
 import { messages } from "../db/schema";
 
 interface ConnectionState {

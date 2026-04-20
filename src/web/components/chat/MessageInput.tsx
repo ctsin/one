@@ -59,12 +59,14 @@ export function MessageInput({
     setUploadError(null);
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
       const res = await fetch("/api/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${getToken()}` },
-        body: form,
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "X-Content-Type": file.type || "application/octet-stream",
+          "X-File-Name": encodeURIComponent(file.name),
+        },
+        body: file,
       });
       if (!res.ok) {
         const err = (await res.json()) as { error?: string };

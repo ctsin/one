@@ -119,32 +119,28 @@ app.patch("/api/users/me", async (c) => {
   return c.json({ token, name });
 });
 
-// Upload file to R2 — multipart/form-data with a "file" field
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 25 MB
+// Upload file to R2 — raw body stream with metadata in request headers
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 
 app.post("/api/upload", async (c) => {
   const payload = c.get("jwtPayload");
-  let formData: FormData;
-  try {
-    formData = await c.req.formData();
-  } catch {
-    return c.json({ error: "invalid multipart body" }, 400);
+  const body = c.req.raw.body;
+  if (!body) return c.json({ error: "missing file" }, 400);
+
+  const contentType =
+    c.req.header("x-content-type") ??
+    c.req.header("content-type") ??
+    "application/octet-stream";
+  const fileName = decodeURIComponent(c.req.header("x-file-name") ?? "upload");
+  const contentLength = Number(c.req.header("content-length") ?? 0);
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return c.json({ error: "file too large (max 100 MB)" }, 413);
   }
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return c.json({ error: "missing file" }, 400);
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return c.json({ error: "file too large (max 25 MB)" }, 413);
-  }
-
-  const contentType = file.type || "application/octet-stream";
   const key = crypto.randomUUID();
-
-  await c.env.MEDIA.put(key, await file.arrayBuffer(), {
+  await c.env.MEDIA.put(key, body, {
     httpMetadata: { contentType },
-    customMetadata: { uploadedBy: payload.sub, fileName: file.name },
+    customMetadata: { uploadedBy: payload.sub, fileName },
   });
 
   return c.json({ key, contentType });
