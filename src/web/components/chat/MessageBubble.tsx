@@ -1,4 +1,4 @@
-import { FileDown } from "lucide-react";
+import { Check, CheckCheck, FileDown } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import type { Message } from "./types";
 
@@ -62,7 +62,17 @@ export function MessageBubble({ message, isSent }: MessageBubbleProps) {
           </a>
         )}
 
-        <p className={`mt-1 text-[10px] ${timeColor}`}>{time}</p>
+        <div
+          className={`mt-1 flex items-center gap-1 ${isSent ? "justify-end" : "justify-start"}`}
+        >
+          <span className={`text-[10px] ${timeColor}`}>{time}</span>
+          {isSent &&
+            (message.deliveredAt ? (
+              <CheckCheck className="h-3 w-3 text-primary-foreground/60" />
+            ) : (
+              <Check className="h-3 w-3 text-primary-foreground/40" />
+            ))}
+        </div>
       </div>
     </div>
   );

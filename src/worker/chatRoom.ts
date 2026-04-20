@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/d1";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { messages } from "../db/schema";
 
 interface ConnectionState {
@@ -29,10 +30,32 @@ export class ChatRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ userId, name } satisfies ConnectionState);
 
+    // Mark undelivered messages sent by the other user as delivered now that
+    // this user has connected.
+    await this.markPendingDelivered(userId);
+
     // Notify all connected clients (including the new one) of updated presence
     this.broadcastPresence();
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** Mark messages sent by others (not userId) that haven't been delivered yet. */
+  private async markPendingDelivered(userId: string): Promise<void> {
+    const db = drizzle(this.env.DB);
+    await db
+      .update(messages)
+      .set({ deliveredAt: new Date().toISOString() })
+      .where(and(isNull(messages.deliveredAt), ne(messages.senderId, userId)));
+  }
+
+  /** Returns true if there is at least one other user currently connected. */
+  private otherIsOnline(senderId: string): boolean {
+    return this.ctx.getWebSockets().some((ws) => {
+      if (ws.readyState !== WebSocket.OPEN) return false;
+      const st = ws.deserializeAttachment() as ConnectionState | null;
+      return st?.userId && st.userId !== senderId;
+    });
   }
 
   async webSocketMessage(
@@ -60,6 +83,7 @@ export class ChatRoom extends DurableObject<Env> {
       const id = crypto.randomUUID();
       const content = data.content.trim();
       const createdAt = new Date().toISOString();
+      const deliveredAt = this.otherIsOnline(state.userId) ? createdAt : null;
 
       const db = drizzle(this.env.DB);
       await db.insert(messages).values({
@@ -68,6 +92,7 @@ export class ChatRoom extends DurableObject<Env> {
         type: "text",
         content,
         createdAt,
+        deliveredAt,
       });
 
       const outgoing = JSON.stringify({
@@ -77,6 +102,7 @@ export class ChatRoom extends DurableObject<Env> {
         senderId: state.userId,
         content,
         createdAt,
+        deliveredAt,
       });
 
       for (const client of this.ctx.getWebSockets()) {
@@ -92,6 +118,7 @@ export class ChatRoom extends DurableObject<Env> {
       const msgType = mimeToMessageType(data.contentType ?? "");
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
+      const deliveredAt = this.otherIsOnline(state.userId) ? createdAt : null;
 
       const db = drizzle(this.env.DB);
       await db.insert(messages).values({
@@ -101,6 +128,7 @@ export class ChatRoom extends DurableObject<Env> {
         content: null,
         mediaKey: data.mediaKey,
         createdAt,
+        deliveredAt,
       });
 
       const outgoing = JSON.stringify({
@@ -111,6 +139,7 @@ export class ChatRoom extends DurableObject<Env> {
         mediaKey: data.mediaKey,
         contentType: data.contentType,
         createdAt,
+        deliveredAt,
       });
 
       for (const client of this.ctx.getWebSockets()) {

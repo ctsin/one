@@ -97,6 +97,28 @@ app.get("/api/me", (c) => {
   return c.json({ sub: payload.sub, name: payload.name });
 });
 
+// Update current user's display name, returns a fresh JWT
+app.patch("/api/users/me", async (c) => {
+  const payload = c.get("jwtPayload");
+  let body: { name?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid body" }, 400);
+  }
+  const name = body.name?.trim();
+  if (!name) return c.json({ error: "name required" }, 400);
+
+  const db = drizzle(c.env.DB);
+  await db.update(users).set({ name }).where(eq(users.id, payload.sub));
+
+  const token = await sign(
+    { sub: payload.sub, name, iat: Math.floor(Date.now() / 1000) },
+    c.env.JWT_SECRET,
+  );
+  return c.json({ token, name });
+});
+
 // Upload file to R2 — multipart/form-data with a "file" field
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 25 MB
 
@@ -139,6 +161,7 @@ app.get("/api/messages", async (c) => {
       content: messages.content,
       mediaKey: messages.mediaKey,
       createdAt: messages.createdAt,
+      deliveredAt: messages.deliveredAt,
     })
     .from(messages)
     .orderBy(asc(messages.createdAt))

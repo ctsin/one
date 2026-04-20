@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getToken, getUser } from "@/lib/auth";
+import { getToken, getUser, setAuth } from "@/lib/auth";
 import { useWebSocket, type WsEvent } from "@/lib/useWebSocket";
 import { Header } from "./Header";
 import { MessageList } from "./MessageList";
@@ -17,6 +17,9 @@ export function Chat() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherOnline, setOtherOnline] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [myName, setMyName] = useState(me.name);
 
   // Load message history on mount
   useEffect(() => {
@@ -24,12 +27,20 @@ export function Chat() {
     fetch("/api/messages", {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load messages");
+        return res.json();
+      })
       .then((data) => {
         const { messages: history } = data as { messages: Message[] };
         setMessages(history ?? []);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        setHistoryError(
+          err instanceof Error ? err.message : "Failed to load messages",
+        );
+      })
+      .finally(() => setHistoryLoading(false));
   }, []);
 
   const otherId = me.id === "u1" ? "u2" : "u1";
@@ -49,13 +60,43 @@ export function Chat() {
     [otherId],
   );
 
-  const { send, sendMedia } = useWebSocket(handleWsEvent);
+  const { send, sendMedia, isConnected } = useWebSocket(handleWsEvent);
+
+  async function handleNameSave(name: string) {
+    const token = getToken();
+    const res = await fetch("/api/users/me", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { token: string; name: string };
+    setAuth(data.token, { id: me.id, name: data.name });
+    setMyName(data.name);
+  }
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <Header other={{ name: other.name, online: otherOnline }} />
-      <MessageList messages={messages} me={me} />
-      <MessageInput onSend={send} onSendMedia={sendMedia} />
+      <Header
+        other={{ name: other.name, online: otherOnline }}
+        myName={myName}
+        isConnected={isConnected}
+        onNameSave={handleNameSave}
+      />
+      <MessageList
+        messages={messages}
+        me={me}
+        loading={historyLoading}
+        error={historyError}
+      />
+      <MessageInput
+        onSend={send}
+        onSendMedia={sendMedia}
+        disabled={!isConnected}
+      />
     </div>
   );
 }

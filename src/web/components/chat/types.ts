@@ -5,4 +5,5 @@ export interface Message {
   type: "text" | "image" | "video" | "file";
   mediaKey?: string | null;
   createdAt: string;
+  deliveredAt?: string | null;
 }

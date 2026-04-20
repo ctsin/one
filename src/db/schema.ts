@@ -17,4 +17,5 @@ export const messages = sqliteTable("messages", {
   content: text("content"),
   mediaKey: text("media_key"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
+  deliveredAt: text("delivered_at"),
 });

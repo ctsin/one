@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { getToken } from "./auth";
 import type { Message } from "../components/chat/types";
 
@@ -10,7 +16,10 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
   const wsRef = useRef<WebSocket | null>(null);
   // Keep onEvent stable across renders without re-connecting
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+  useLayoutEffect(() => {
+    onEventRef.current = onEvent;
+  });
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -26,6 +35,8 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
+      ws.onopen = () => setIsConnected(true);
+
       ws.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data as string) as {
@@ -37,6 +48,7 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
             mediaKey?: string;
             contentType?: string;
             createdAt?: string;
+            deliveredAt?: string | null;
             online?: string[];
           };
 
@@ -62,6 +74,7 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
                   content: data.content,
                   type: "text",
                   createdAt: data.createdAt,
+                  deliveredAt: data.deliveredAt ?? null,
                 },
               });
             } else {
@@ -75,6 +88,7 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
                   type: msgType,
                   mediaKey: data.mediaKey,
                   createdAt: data.createdAt,
+                  deliveredAt: data.deliveredAt ?? null,
                 },
               });
             }
@@ -88,6 +102,7 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
 
       ws.onclose = () => {
         wsRef.current = null;
+        setIsConnected(false);
         if (active) {
           retryTimeout = setTimeout(connect, 3000);
         }
@@ -135,5 +150,5 @@ export function useWebSocket(onEvent: (event: WsEvent) => void) {
     }
   }, []);
 
-  return { send, sendMedia };
+  return { send, sendMedia, isConnected };
 }
