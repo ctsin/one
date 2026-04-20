@@ -45,7 +45,7 @@
   ],
   "routes": [
     {
-      "pattern": "one.ctsin.dev/*",
+      "pattern": "one.ctsin.dev",
       "custom_domain": true
     }
   ]
